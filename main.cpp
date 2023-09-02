@@ -4,76 +4,52 @@
 #include <map>
 #include <iostream>
 #include <cmath>
+#include <vector>
+#include "client.h"
 
 using namespace std;
 
-const int padding = 15;
-const float waitTime = 0.3; // 30 ms
-const int teamSize = 1;
+// g++ -std=c++11 -o myapp main.cpp client.cpp -lfltk -I /opt/homebrew/Cellar/flatbuffers/23.5.26/include -I /opt/homebrew/Cellar/fltk/1.3.8_1/include/ -lfltk -lfltk_images -lfltk_forms -L /opt/homebrew/Cellar/fltk/1.3.8_1/lib
 
-const int FL_A = 97;
-const int FL_S = 115;
-const int FL_D = 100;
-const int FL_W = 119;
+const int padding = 15;
+const float waitTime = 0.03; // 30 ms;
+const int incr = 5;
+const int teamSize = 1;
+const int objs = (2*teamSize) + 1;
 
 class SoccerFieldWindow : public Fl_Window {
 private:
     int radius;
-    std::map<int, bool> keysState;
-
-    int pos[1 + (2*teamsize)];
-    int mv[1 + (2*teamsize)];
-    // int ballPos[2];
-    // int t1Pos[teamSize][2];
-    // int t2Pos[teamSize][2];
-
-    // int ballMv[2];
-    // int t1Mv[teamSize][2];
-    // int t2Mv[teamSize][2];
-
-    const int incr = 5;
-    // this ensures we are not looking are the same object when checking for overlap
-    const float lowerDis = incr * sqrt(2);
+    int dx = 0;
+    int dy = 0;
+    map<int, bool> keysState;
+    vector<vector<int>> pos; // positions
+    vector<vector<int>> mv; // moves
+    Client myClient;
+    int pid;
+    int port;
 
 public:
-    SoccerFieldWindow(int width, int height, const char* title)
-        : Fl_Window(width, height, title)
+    SoccerFieldWindow(int width, int height, const char* title, int pid, int port)
+        : Fl_Window(width, height, title), mv(objs, vector<int>(2, 0)), radius(height / 30), pid(pid), myClient(port)
     {
-        ballPos[0] = width / 2;
-        ballPos[1] = height / 2;
-
-        t1Pos[0][0] = ballPos[0] - 200;
-        t1Pos[0][1] = ballPos[1];
-
-        t2Pos[0][0] = ballPos[0] + 200;
-        t2Pos[0][1] = ballPos[1];
-
-        ballMv[0] = 0;
-        ballMv[1] = 0;
-
-        for (int i=0; i < teamSize; i++) {
-            t1Mv[i][0] = 0;
-            t1Mv[i][1] = 0;
-
-            t2Mv[i][0] = 0;
-            t2Mv[i][1] = 0;
-        }
-
-        radius = height / 30;
-        cout << "radius: " << radius << endl;
+        pos.push_back({width / 2, height / 2}); // ball
+        pos.push_back({pos[0][0] - 200, pos[0][1]}); // p1
+        pos.push_back({pos[0][0] + 200, pos[0][1]}); // p2
+        mv[0].assign({0, 0});
 
         Fl::add_timeout(waitTime, timerCallback, this); // Set up the timer
     }
 
     void draw() override {
         drawSoccerField();
-        drawPlayer(ballPos[0], ballPos[1], FL_BLUE); // ball
-
-        int i;
+        drawPlayer(pos[0], FL_BLUE); // ball
         // teams
-        for (i=0; i < teamSize; i++) {
-            drawPlayer(t1Pos[i][0], t1Pos[i][1], FL_RED);
-            drawPlayer(t2Pos[i][0], t2Pos[i][1], FL_BLACK);
+        for (int i=1; i < objs; i++) {
+            if (i <= teamSize)
+                drawPlayer(pos[i], FL_RED); // t1
+            else
+                drawPlayer(pos[i], FL_BLACK); // t2
         }
     }
 
@@ -105,9 +81,9 @@ public:
         fl_circle(w() / 2, h() / 2, w() / 8);
     }
 
-    void drawPlayer(int x, int y, int color) {
+    void drawPlayer(vector<int> &p, int color) {
         fl_color(color);
-        fl_pie(x - radius, y - radius, radius * 2, radius * 2, 0, 360);
+        fl_pie(p[0] - radius, p[1] - radius, radius * 2, radius * 2, 0, 360);
     }
 
     int handle(int event) override {
@@ -131,130 +107,94 @@ public:
 
     static void timerCallback(void* userdata) {
         SoccerFieldWindow* window = static_cast<SoccerFieldWindow*>(userdata);
+        window->updateAllMoves();
         window->updateAllPositions();
         window->redraw();
-        Fl::repeat_timeout(waitTime, timerCallback, userdata); // Re-schedule the timer
+        Fl::repeat_timeout(waitTime-0.01, timerCallback, userdata); // Re-schedule the timer - 0.01 ms
+    }
+
+    void updateAllMoves() {
+        for (int i=0; i < objs; i++)
+            mv[i].assign({0, 0});
+
+        if (dx != 0 || dy != 0)
+            myClient.send(pid, dx, dy);
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        
+        bool wasEmpty = myClient.isEmptyRecv();
+
+        while (!myClient.isEmptyRecv()) {
+            std::array<int, 3> data = myClient.popRecv();
+            mv[data[0]].assign({data[1], data[2]});
+        }
     }
 
     void updateMove() {
-        int keyTypes[2][4] = {{FL_A, FL_D, FL_W, FL_S},
-                              {FL_Left, FL_Right, FL_Up, FL_Down}};
+        dx = 0;
+        dy = 0;
 
-        int* t[2];
-        for (int i=0; i<2; i++){
-            if (i == 0) {
-                t[0] = &t1Mv[0][0];
-                t[1] = &t1Mv[0][1];
-            } else {
-                t[0] = &t2Mv[0][0];
-                t[1] = &t2Mv[0][1];
-            }
-
-            *t[0] = 0;
-            *t[1] = 0;
-
-            if (keysState[keyTypes[i][0]]) {
-                *t[0] -= incr;
-            }
-            if (keysState[keyTypes[i][1]]) {
-                *t[0] += incr;
-            }
-            if (keysState[keyTypes[i][2]]) {
-                *t[1] -= incr;
-            }
-            if (keysState[keyTypes[i][3]]) {
-                *t[1] += incr;
-            }
+        if (keysState[FL_Left]) {
+            dx -= incr;
+        }
+        if (keysState[FL_Right]) {
+            dx += incr;
+        }
+        if (keysState[FL_Up]) {
+            dy -= incr;
+        }
+        if (keysState[FL_Down]) {
+            dy += incr;
         }
     }
 
     void updateAllPositions() {
-        int ballPosTmp[2];
-        int ballMvTmp[2];
-
-        int t1PosTmp[2];
-        int t1MvTmp[2];
-
-        int t2PosTmp[2];
-        int t2MvTmp[2];
-
-        std::copy(ballPos, ballPosTmp + 2, ballPosTmp);
-        std::copy(ballPos, ballPosTmp + 2, ballPosTmp);
-        std::copy(ballPos, ballPosTmp + 2, ballPosTmp);
-        std::copy(ballPos, ballPosTmp + 2, ballPosTmp);
-        std::copy(ballPos, ballPosTmp + 2, ballPosTmp);
+        vector<vector<int>> mvCp = mv;
+        // cout << "still running update pos" << endl;
 
         // cout << "updating ball" << endl;
-        // cout << "t1: " << t1Mv[0][0] << ", " << t1Mv[0][1] << endl;
-        // cout << "t2: " << t2Mv[0][0] << ", " << t2Mv[0][1] << endl;
-        // cout << "ball: " << ballMv[0] << ", " << ballMv[1] << endl;
-        updatePos(ballPos, ballMv);
-
-        for (int i=0; i < teamSize; i++) {
+        for (int i=0; i < objs; i++) {
             // cout << "updating t1" << endl;
-            // cout << "t1: " << t1Mv[0][0] << ", " << t1Mv[0][1] << endl;
-            // cout << "t2: " << t2Mv[0][0] << ", " << t2Mv[0][1] << endl;
-            // cout << "ball: " << ballMv[0] << ", " << ballMv[1] << endl;
-            updatePos(t1Pos[i], t1Mv[i]);
-            // cout << "updating t2" << endl;
-            // cout << "t1: " << t1Mv[0][0] << ", " << t1Mv[0][1] << endl;
-            // cout << "t2: " << t2Mv[0][0] << ", " << t2Mv[0][1] << endl;
-            // cout << "ball: " << ballMv[0] << ", " << ballMv[1] << endl;
-            updatePos(t2Pos[i], t2Mv[i]);
+            int nx = pos[i][0] + mvCp[i][0]; // new x
+            int ny = pos[i][1] + mvCp[i][1]; // new y
+            
+            // check against every object for overlapping
+            for (int j=0; j < objs; j++) {
+                if (i != j) {
+                    int x2 = pos[j][0];
+                    int y2 = pos[j][1];
+
+                    float dis = sqrt(pow((nx - x2), 2) + pow((ny - y2), 2));
+                    int signx = ((x2 - nx) / abs(x2 - nx));
+                    int signy = ((y2 - ny) / abs(y2 - ny));
+
+                    // modify until we are not overlapping
+                    while (dis < (2 * radius)) {
+                        nx -= signx;
+                        ny -= signy;
+                        dis = sqrt(pow((nx - x2), 2) + pow((ny - y2), 2));
+                    }
+                }
+
+                // Keep the object within the soccer field
+                int rp = radius + padding;
+                if (nx < rp) nx = rp;
+                if (nx > w() - rp) nx = w() - rp;
+                if (ny < rp) ny = rp;
+                if (ny > h() - rp) ny = h() - rp;
+                                
+                pos[i].assign({nx, ny});
+            }
         }
-        // cout << endl;
-        // cout << endl;
-    }
-
-    void overlap(int &nx, int &ny, int x2, int y2, int (&pos)[2]) {
-        float dis = sqrt(pow((nx - x2), 2) + pow((ny - y2), 2));
-        if ((pos[0] == x2) && (pos[1] == y2)) return;
-        
-        // idea is we want the objects to stick together
-        // but not overlap, so to prevent a gap between them
-        if (dis < (2 * radius)) {
-            float dmv = ((2 * radius) - dis + 1) / sqrt(2);
-            // cout << "dmv float: " << ((2 * radius) - dis) / sqrt(2) << endl;
-            // cout << "dmv: " << dmv << endl;
-            // cout << "dis: " << dis << endl;
-            // cout << "(nx, ny): " << nx << ", " << ny << endl;
-            // cout << "(x2, y2): " << x2 << ", " << y2 << endl;
-
-            nx -= ((x2 - nx) / abs(x2 - nx)) * dmv;
-            ny -= ((y2 - ny) / abs(y2 - ny)) * dmv;
-            // cout << "after (nx, ny): " << nx << ", " << ny << endl;
-            // cout << "dis after: " << sqrt(pow((nx - x2), 2) + pow((ny - y2), 2)) << endl;
-        }
-
-    }
-
-    void updatePos(int (&pos)[2], int (&mv)[2]) {
-        int newX = pos[0] + mv[0];
-        int newY = pos[1] + mv[1];
-
-        // keep object from overlapping x
-        cout << "checking ball" << endl;
-        overlap(newX, newY, ballPos[0], ballPos[1], pos);
-        for (int i=0; i < teamSize; i++) {
-            cout << "checking t1" << endl;
-            overlap(newX, newY, t1Pos[i][0], t1Pos[i][1], pos);
-            cout << "checking t2" << endl;
-            overlap(newX, newY, t2Pos[i][0], t2Pos[i][1], pos);
-        }
-        
-        // Keep the object within the soccer field
-        int rp = radius + padding;
-
-        if (newX > rp && newX < w() - rp)
-            pos[0] = newX;
-        if (newY > rp && newY < h() - rp)
-            pos[1] = newY;            
-
+            
     }
 };
 
-int main() {
-    SoccerFieldWindow window(900, 500, "Soccer");
+int main(int argc, char* argv[]) {
+    // ./myapp 1 12346 # player 1
+    // ./myapp 2 12347 # player 2
+
+    SoccerFieldWindow window(900, 500, "Soccer", std::stoi(argv[1]), std::stoi(argv[2]));
     window.show();
     return Fl::run();
 }

@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <map>
 #include <cstring>
+#include <cerrno> 
 #include <thread>
 #include <chrono>
 #include "moves_generated.h"
@@ -32,13 +33,16 @@ private:
 public:
     Server(int PORT) {
         sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (sockfd == -1)
+            std::cerr << "Error creating socket: " << strerror(errno) << std::endl;
 
-        memset(&serverAddr, 0, sizeof(serverAddr));
+        // memset(&serverAddr, 0, sizeof(serverAddr));
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_addr.s_addr = INADDR_ANY;
         serverAddr.sin_port = htons(PORT);  // Replace with the port to listen on
 
-        bind(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
+        if (bind(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1)
+            std::cerr << "Error binding socket: " << strerror(errno) << std::endl;
     }
 
     ~Server() {
@@ -55,15 +59,18 @@ public:
         
         // send to all clients
         for (auto i : clients) {
-            sendto(sockfd, bufferData, bufferSize, 0, (struct sockaddr*)&i.second, sizeof(i.second));
+            if (sendto(sockfd, bufferData, bufferSize, 0, (struct sockaddr*)&i.second, sizeof(i.second)) == -1)
+                std::cerr << "Error sending data: " << strerror(errno) << std::endl;
         }
+
+        builder.Clear();
     }
 
     void recv() {
         // Receive a message
-        // std::cout << "waiting to recv... " << std::endl;
-        std::cout << "buffer:" << buffer[0] << std::endl;
         ssize_t bytesReceived = recvfrom(sockfd, buffer, sizeof(buffer), 0, nullptr, nullptr);
+        if (bytesReceived == -1)
+            std::cerr << "Error receiving data: " << strerror(errno) << std::endl;
 
         // deserialized data
         auto mv = MyNamespace::GetMoves(buffer);
