@@ -1,0 +1,10 @@
+// moves.fbs
+namespace MyNamespace;
+
+table Moves {
+    pid: int;
+    dx: int;
+    dy: int;
+}
+
+root_type Moves;
