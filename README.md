@@ -29,7 +29,7 @@ Implemented a Graphical User Interface using SDL2, complete with realistic physi
 
 ## SDL2 GUI
 
-![GUI](gui.png "GUI")
+![GUI](images/gui.png "GUI")
 
 ## Network Architecture
 
@@ -39,10 +39,10 @@ First I thought of using a javascript website for rendering the UI with C++ for 
 
 The final solution I came up with was to simulate the latency, and run all the clients on my computer (with different artificial latency), with different port numbers, but still have an EC2 server. This approach best simulates a real-world multiplayer player game environment, without actually having to have someone be in different locations in the world player in the game. That architecture looks like this:
 
-![With Remote Server](with_remote_server.png "With Remote Server")
+![With Remote Server](images/with_remote_server.png "With Remote Server")
 
 For now, I realized I could just all all the programs running on my machine, as shown in the diagram below. Of course, I can later move to the previous architecture, and explore the real-world program that occurs, by actually having the packets travel through the internet.
 
-![Fully Local](fully_local.png "Fully Local")
+![Fully Local](images/fully_local.png "Fully Local")
 
 In an ideal world, we would have different computers in different parts of the world for clients, and a person has to physically be there to test it.
