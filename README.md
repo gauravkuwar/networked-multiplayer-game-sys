@@ -9,14 +9,16 @@ This time I had three main goals: learn C++, learn how to use network protocols 
 **C++11** - This is the only language used.
 **Mac OS** - I have a Mac, but I don’t see why it wouldn’t work on other machines with the right modifications
 
-### External Libraries
+#### External Libraries
 
 **SDL2** - For GUI
+
 **flatbuffers** - serialize and deserialize data over the network
 
-### Files
+#### Files
 
 **main.cpp** - client side game
+
 **server.cpp** - server code
 
 ## Key Points
