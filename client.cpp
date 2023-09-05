@@ -6,10 +6,9 @@
 #include <thread>
 #include <chrono>
 #include <cerrno> 
-#include "moves_generated.h"
+#include "states_generated.h"
 #include "client.h"
 
-int LAG = 60; // ms
 
 Client::Client(int PORT) {
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -48,29 +47,30 @@ void Client::recv() {
             std::cerr << "Error receiving data: " << strerror(errno) << std::endl;
 
         // deserialized data
-        auto mv = MyNamespace::GetMoves(buffer);
-        auto pid = mv->pid();
-        auto dx = mv->dx();
-        auto dy = mv->dy();
+        auto states = MyNamespace::GetStates(buffer);
+        int pid = states->pid();
+        float x = states->x();
+        float y = states->y();
+        float vx = states->vx();
+        float vy = states->vy();
 
         // push to shared queue
         {
             std::lock_guard<std::mutex> lock(qMtx);
-            recvQueue.push({pid, dx, dy});
+            recvQueue.push({static_cast<float>(pid), x, y, vx, vy});
         }
     }
 }
 
-void Client::send(int pid, int dx, int dy) {
+void Client::send(int pid, float x, float y, float vx, float vy) {
     // serialized data
-    auto mv = MyNamespace::CreateMoves(builder, pid, dx, dy);
-    builder.Finish(mv);
+    auto states = MyNamespace::CreateStates(builder, pid, x, y, vy, vx);
+    builder.Finish(states);
 
     const uint8_t* bufferData = builder.GetBufferPointer();
     size_t bufferSize = builder.GetSize();
     
     // Send the message to the server
-    std::this_thread::sleep_for(std::chrono::milliseconds(LAG));
     ssize_t bytesSent = sendto(sockfd, bufferData, bufferSize, 0,
                             (struct sockaddr*)&serverAddr, sizeof(serverAddr));
 
@@ -84,7 +84,7 @@ bool Client::isEmptyRecv() {
     return recvQueue.empty();
 }
 
-std::array<int, 3> Client::popRecv() {
+std::array<float, 5> Client::popRecv() {
     std::lock_guard<std::mutex> lock(qMtx);
     data = recvQueue.front();
     recvQueue.pop();

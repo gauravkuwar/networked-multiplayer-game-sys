@@ -4,7 +4,7 @@
 #include <queue>
 #include <thread>
 #include <arpa/inet.h>
-#include "moves_generated.h"
+#include "states_generated.h"
 
 class Client {
 private:
@@ -13,8 +13,8 @@ private:
     struct sockaddr_in serverAddr;
     char buffer[1024];
     flatbuffers::FlatBufferBuilder builder;
-    std::queue<std::array<int, 3>> recvQueue;
-    std::array<int, 3> data;
+    std::queue<std::array<float, 5>> recvQueue;
+    std::array<float, 5> data;
     std::mutex qMtx;
     std::thread recvThread;
     void recv();
@@ -22,9 +22,9 @@ private:
 public:
     Client(int PORT);
     ~Client();
-    void send(int pid, int dx, int dy);
+    void send(int pid, float x, float y, float vx, float vy);
     bool isEmptyRecv();
-    std::array<int, 3> popRecv();
+    std::array<float, 5> popRecv();
 };
 
 #endif

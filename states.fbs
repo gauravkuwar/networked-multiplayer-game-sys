@@ -1,0 +1,12 @@
+// states.fbs
+namespace MyNamespace;
+
+table States {
+    pid: int;
+    x: float;
+    y: float;
+    vx: float;
+    vy: float;
+}
+
+root_type States;
