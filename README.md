@@ -14,17 +14,15 @@ Implemented a Graphical User Interface using SDL2, complete with realistic physi
 
 ## Requirements
 
-**C++11** - This is the only language used.
-**Mac OS** - I have a Mac, but I don’t see why it wouldn’t work on other machines with the right modifications
+- **C++11** - This is the only language used.
+- **Mac OS** - I have a Mac, but I don’t see why it wouldn’t work on other machines with the right modifications
 
 ### External Libraries
 
-**SDL2** - For GUI
-
-**flatbuffers** - serialize and deserialize data over the network
+- **SDL2** - For GUI
+- **flatbuffers** - serialize and deserialize data over the network
 
 ### Files
 
-**main.cpp** - client side game
-
-**server.cpp** - server code
+- **main.cpp** - client side game
+- **server.cpp** - server code
